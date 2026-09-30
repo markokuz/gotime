@@ -107,36 +107,75 @@
     };
     date.value = today();
 
+    let meta = null;
+    const dayCache = new Map();
+
+    async function getJson(url) {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(res.status === 404 ? "not found" : `HTTP ${res.status}`);
+      return res.json();
+    }
+
     async function init() {
       try {
-        const res = await fetch("/api/stops");
-        const stops = await res.json();
-        if (!res.ok) throw new Error(stops.error);
-        const opts = stops.map((s) => `<option value="${s.code}">${s.name}</option>`).join("");
+        meta = await getJson("data/index.json");
+        const opts = meta.stops.map((s, i) => `<option value="${i}">${s.name}</option>`).join("");
         from.innerHTML = to.innerHTML = opts;
-        from.value = store.get("from") || "UN";
-        to.value = store.get("to") || "KI";
+        const idx = (code) => String(Math.max(0, meta.stops.findIndex((s) => s.code === code)));
+        from.value = idx(store.get("from") || "UN");
+        to.value = idx(store.get("to") || "KI");
+        const iso = (d) => `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6)}`;
+        date.min = iso(meta.dates[0]);
+        date.max = iso(meta.dates.at(-1));
         load();
       } catch (e) {
-        status.textContent = "😿 Couldn't load stations: " + e.message;
+        status.textContent = "😿 Couldn't load the timetable: " + e.message;
       }
     }
 
+    // Every direct train on the chosen day that stops at `from`, then later at `to`.
+    function findTrains(day, a, b) {
+      const hhmm = (m) => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+      const out = [];
+      for (const t of day.trips) {
+        let dep = null;
+        for (let i = 2; i < t.length; i += 3) {
+          if (t[i] === a && t[i + 2] >= 0) dep = t[i + 2];
+          else if (t[i] === b && dep !== null && t[i + 1] >= 0) {
+            const arr = t[i + 1], mins = arr - dep, line = day.lines[t[0]];
+            out.push({
+              depart: hhmm(dep), arrive: hhmm(arr), departMin: dep, nextDay: dep >= 1440,
+              duration: mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`,
+              line: line.name, colour: line.colour, number: t[1],
+            });
+            break;
+          }
+        }
+      }
+      return out.sort((x, y) => x.departMin - y.departMin);
+    }
+
     async function load() {
-      store.set("from", from.value); store.set("to", to.value);
+      const a = +from.value, b = +to.value;
+      store.set("from", meta.stops[a].code); store.set("to", meta.stops[b].code);
       list.innerHTML = "";
-      if (from.value === to.value) { status.textContent = "Pick two different stations 🙂"; return; }
-      status.textContent = "Checking the timetable… 🚂 (first load can take a few seconds)";
-      const req = `${from.value}|${to.value}|${date.value}`;
+      if (a === b) { status.textContent = "Pick two different stations 🙂"; return; }
+      const d = date.value.replaceAll("-", "");
+      if (!meta.dates.includes(d)) {
+        status.textContent = `No timetable for that day yet 📅 (available ${date.min} to ${date.max})`;
+        return;
+      }
+      status.textContent = "Checking the timetable… 🚂";
+      const req = `${a}|${b}|${d}`;
       load.last = req;
       try {
-        const res = await fetch(`/api/schedule?date=${date.value.replaceAll("-", "")}&from=${from.value}&to=${to.value}`);
-        const data = await res.json();
+        if (!dayCache.has(d)) dayCache.set(d, getJson(`data/${d}.json`));
+        const day = await dayCache.get(d);
         if (load.last !== req) return; // a newer request superseded this one
-        if (!res.ok) throw new Error(data.error);
-        results = data;
+        results = findTrains(day, a, b);
         render();
       } catch (e) {
+        dayCache.delete(d);
         status.textContent = "😿 " + e.message;
       }
     }
