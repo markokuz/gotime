@@ -4,9 +4,8 @@
   "private": true,
   "description": "A cute little GO Transit daily schedule viewer",
   "scripts": {
-    "build": "node build.js",
     "start": "node server.js",
-    "dev": "node build.js && node server.js"
+    "dev": "node server.js"
   },
   "engines": {
     "node": ">=18"

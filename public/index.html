@@ -85,7 +85,7 @@
       </div>
     </div>
 
-    <p class="status" id="status">Loading stations…</p>
+    <p class="status" id="status">Fetching the latest GO timetable… 🚂</p>
     <ul id="list"></ul>
     <footer>Timetable from GO Transit’s public GTFS feed (Metrolinx Open Data)</footer>
   </main>
@@ -112,13 +112,14 @@
 
     async function getJson(url) {
       const res = await fetch(url);
-      if (!res.ok) throw new Error(res.status === 404 ? "not found" : `HTTP ${res.status}`);
-      return res.json();
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+      return body;
     }
 
     async function init() {
       try {
-        meta = await getJson("data/index.json");
+        meta = await getJson("/api/index");
         const opts = meta.stops.map((s, i) => `<option value="${i}">${s.name}</option>`).join("");
         from.innerHTML = to.innerHTML = opts;
         const idx = (code) => String(Math.max(0, meta.stops.findIndex((s) => s.code === code)));
@@ -169,7 +170,7 @@
       const req = `${a}|${b}|${d}`;
       load.last = req;
       try {
-        if (!dayCache.has(d)) dayCache.set(d, getJson(`data/${d}.json`));
+        if (!dayCache.has(d)) dayCache.set(d, getJson(`/api/day?date=${d}`));
         const day = await dayCache.get(d);
         if (load.last !== req) return; // a newer request superseded this one
         results = findTrains(day, a, b);
