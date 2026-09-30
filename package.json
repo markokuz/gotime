@@ -1,0 +1,12 @@
+{
+  "name": "gotime",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A cute little GO Transit daily schedule viewer",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
