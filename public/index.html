@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>GO Time</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>" />
+  <script>
+    // Apply the saved theme before the page paints, so there's no flash of the wrong colours.
+    try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;900&display=swap" rel="stylesheet" />
   <style>
@@ -27,6 +31,20 @@
         --thumb: #3b6a50; color-scheme: dark;
       }
     }
+    :root[data-theme="dark"] {
+      --bg: #12201a; --card: #1a2d24; --ink: #e6f5ec; --muted: #9dbba9;
+      --green: #5fd08c; --green-soft: #21402f; --pink: #4a2a35; --border: #2a4536;
+      --thumb: #3b6a50; color-scheme: dark;
+    }
+    body, .card, li, select, .date-btn { transition: background-color .25s, border-color .25s, color .25s; }
+    .theme-toggle {
+      position: fixed; top: 14px; right: 14px; z-index: 20; width: 44px; height: 44px;
+      border: 2px solid var(--border); border-radius: 50%; background: var(--card);
+      box-shadow: 0 3px 0 var(--border); font-size: 1.2rem; cursor: pointer;
+      display: grid; place-items: center; transition: transform .3s;
+    }
+    .theme-toggle:hover { transform: rotate(-20deg) scale(1.08); }
+    .theme-toggle:focus-visible { outline: 3px solid var(--green-soft); outline-offset: 2px; }
     * { box-sizing: border-box; }
     body {
       margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink);
@@ -124,6 +142,7 @@
   </style>
 </head>
 <body>
+  <button type="button" class="theme-toggle" id="themeToggle"></button>
   <main>
     <h1><span class="train">🚆</span> GO Time</h1>
     <p class="sub">every direct train, all day, no fuss</p>
@@ -324,6 +343,24 @@
     document.addEventListener("click", (e) => { if (!cal.hidden && !e.target.closest(".datepick")) openCal(false); });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !cal.hidden) { openCal(false); dateBtn.focus(); } });
     setDate(today());
+
+    // ---------- light / dark switch ----------
+    const themeBtn = $("themeToggle");
+    const darkQuery = matchMedia("(prefers-color-scheme: dark)");
+    const isDark = () => (document.documentElement.dataset.theme || (darkQuery.matches ? "dark" : "light")) === "dark";
+    function drawThemeBtn() {
+      themeBtn.textContent = isDark() ? "🌙" : "☀️";
+      themeBtn.title = `Switch to ${isDark() ? "light" : "dark"} mode`;
+      themeBtn.setAttribute("aria-label", themeBtn.title);
+    }
+    themeBtn.onclick = () => {
+      const next = isDark() ? "light" : "dark";
+      document.documentElement.dataset.theme = next;
+      store.set("theme", next);
+      drawThemeBtn();
+    };
+    darkQuery.addEventListener("change", drawThemeBtn);
+    drawThemeBtn();
 
     from.onchange = to.onchange = load;
     $("swap").onclick = () => { [from.value, to.value] = [to.value, from.value]; load(); };
