@@ -1,6 +1,6 @@
 # 🚆 GO Time
 
-A tiny, cute page that shows every direct GO train between two stations on a given day
+A tiny, page that shows every direct GO train between two stations on a given day
 (defaults to Union → Kitchener).
 
 ## How it works
