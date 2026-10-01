@@ -11,8 +11,6 @@ A tiny, page that shows every direct GO train between two stations on a given da
   functions. Vercel's CDN caches their responses for an hour, so most visits never wait on a download.
 - `public/index.html` is the whole front end: it loads a day and finds the direct trains in your browser.
 
-Hosted on Vercel: every push to `main` deploys automatically. No API key or build step needed.
-
 ## Run locally
 
 ```
