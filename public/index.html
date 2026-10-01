@@ -139,6 +139,13 @@
       html { scrollbar-color: var(--thumb) var(--bg); }
     }
     footer { text-align: center; color: var(--muted); font-size: .75rem; margin-top: 32px; }
+    .fresh {
+      display: inline-flex; align-items: center; gap: 6px; margin-bottom: 8px; padding: 6px 12px;
+      background: var(--green-soft); color: var(--ink); border-radius: 999px; font-weight: 700; font-size: .78rem;
+    }
+    .fresh[hidden] { display: none; }
+    .fresh .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 50% { opacity: .35; } }
   </style>
 </head>
 <body>
@@ -175,7 +182,10 @@
 
     <p class="status" id="status">Fetching the latest GO timetable… 🚂</p>
     <ul id="list"></ul>
-    <footer>Timetable from GO Transit’s public GTFS feed (Metrolinx Open Data)</footer>
+    <footer>
+      <div class="fresh" id="fresh" hidden><span class="pulse"></span><span id="freshText"></span></div>
+      <div>Timetable from GO Transit’s public GTFS feed (Metrolinx Open Data)</div>
+    </footer>
   </main>
 
   <script>
@@ -204,9 +214,33 @@
       return body;
     }
 
+    // "GO updated the timetable Sep 28 · pulled 5 min ago"
+    function showFreshness() {
+      const ago = (iso) => {
+        const mins = Math.round((Date.now() - new Date(iso)) / 60000);
+        const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+        if (mins < 1) return "just now";
+        if (mins < 60) return rtf.format(-mins, "minute");
+        if (mins < 48 * 60) return rtf.format(-Math.round(mins / 60), "hour");
+        return rtf.format(-Math.round(mins / 1440), "day");
+      };
+      const full = (iso) => new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+      const parts = [];
+      if (meta.published) parts.push(`GO updated the timetable ${new Date(meta.published).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`);
+      if (meta.generated) parts.push(`pulled ${ago(meta.generated)}`);
+      if (!parts.length) return;
+      $("freshText").textContent = parts.join(" · ");
+      $("fresh").title = [
+        meta.published && `GO last published the timetable: ${full(meta.published)}`,
+        meta.generated && `This site last pulled it: ${full(meta.generated)}`,
+      ].filter(Boolean).join("\n");
+      $("fresh").hidden = false;
+    }
+
     async function init() {
       try {
         meta = await getJson("/api/index");
+        showFreshness();
         const opts = meta.stops.map((s, i) => `<option value="${i}">${s.name}</option>`).join("");
         from.innerHTML = to.innerHTML = opts;
         const idx = (code) => String(Math.max(0, meta.stops.findIndex((s) => s.code === code)));
