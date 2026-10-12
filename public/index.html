@@ -9,6 +9,11 @@
     // Apply the saved theme before the page paints, so there's no flash of the wrong colours.
     try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
   </script>
+  <!-- Vercel Web Analytics (plain-HTML setup; served by Vercel at /_vercel/insights) -->
+  <script>
+    window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+  </script>
+  <script defer src="/_vercel/insights/script.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;900&display=swap" rel="stylesheet" />
   <style>
@@ -22,6 +27,7 @@
       --pink: #ffd6e0;
       --border: #d7eadd;
       --thumb: #b5dcc3;
+      --warn: #b45f06; --warn-soft: #fdebd3; --bad: #c0392b; --bad-soft: #fbe0dc;
       color-scheme: light;
     }
     @media (prefers-color-scheme: dark) {
@@ -29,16 +35,51 @@
         --bg: #12201a; --card: #1a2d24; --ink: #e6f5ec; --muted: #9dbba9;
         --green: #5fd08c; --green-soft: #21402f; --pink: #4a2a35; --border: #2a4536;
         --thumb: #3b6a50; color-scheme: dark;
+        --warn: #f3b25f; --warn-soft: #43321c; --bad: #ff8a7a; --bad-soft: #4a2622;
       }
     }
     :root[data-theme="dark"] {
       --bg: #12201a; --card: #1a2d24; --ink: #e6f5ec; --muted: #9dbba9;
       --green: #5fd08c; --green-soft: #21402f; --pink: #4a2a35; --border: #2a4536;
       --thumb: #3b6a50; color-scheme: dark;
+        --warn: #f3b25f; --warn-soft: #43321c; --bad: #ff8a7a; --bad-soft: #4a2622;
     }
     body, .card, li, select, .date-btn { transition: background-color .25s, border-color .25s, color .25s; }
+    .toggles { position: fixed; top: 14px; right: 14px; z-index: 20; display: flex; gap: 8px; }
+    .clock-toggle {
+      height: 44px; padding: 0 12px; border: 2px solid var(--border); border-radius: 999px;
+      background: var(--card); color: var(--ink); box-shadow: 0 3px 0 var(--border);
+      font: inherit; font-weight: 900; font-size: .85rem; cursor: pointer;
+    }
+    .clock-toggle:hover { transform: scale(1.05); }
+    .clock-toggle:focus-visible { outline: 3px solid var(--green-soft); outline-offset: 2px; }
+    @media (max-width: 640px) {
+      .toggles { position: static; justify-content: flex-end; margin: -16px 0 10px; }
+    }
+
+    /* live status */
+    .live { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .live:empty { display: none; }
+    .pill { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 9px; font-size: .72rem; font-weight: 800; }
+    .pill.ok { background: var(--green-soft); color: var(--green); }
+    .pill.late { background: var(--warn-soft); color: var(--warn); }
+    .pill.bad { background: var(--bad-soft); color: var(--bad); }
+    .pill.info { background: var(--bg); color: var(--muted); border: 1.5px solid var(--border); }
+    li.cancelled .times { text-decoration: line-through; text-decoration-thickness: 2px; opacity: .6; }
+    .times-col { display: flex; flex-direction: column; min-width: 0; }
+    .alerts { display: grid; gap: 8px; margin: 0 0 12px; }
+    .alert {
+      background: var(--warn-soft); color: var(--ink); border: 2px solid var(--warn); border-radius: 16px;
+      padding: 10px 14px; font-size: .85rem;
+    }
+    .alert summary { font-weight: 800; cursor: pointer; list-style: none; }
+    .alert summary::-webkit-details-marker { display: none; }
+    .alert summary::before { content: "⚠️ "; }
+    .alert p { margin: 6px 0 0; color: var(--ink); white-space: pre-line; }
+    .live-note { text-align: center; color: var(--muted); font-size: .75rem; font-weight: 700; margin: -6px 0 12px; }
+    .live-note:empty { display: none; }
     .theme-toggle {
-      position: fixed; top: 14px; right: 14px; z-index: 20; width: 44px; height: 44px;
+      width: 44px; height: 44px;
       border: 2px solid var(--border); border-radius: 50%; background: var(--card);
       box-shadow: 0 3px 0 var(--border); font-size: 1.2rem; cursor: pointer;
       display: grid; place-items: center; transition: transform .3s;
@@ -82,7 +123,12 @@
     }
     li.past { opacity: .45; }
     li.next { border-color: var(--green); box-shadow: 0 4px 0 var(--green-soft); }
-    .times { font-size: 1.3rem; font-weight: 900; font-variant-numeric: tabular-nums; }
+    .times { font-size: 1.3rem; font-weight: 900; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    @media (max-width: 440px) {
+      .times { font-size: 1.05rem; }
+      .times .arrow { margin: 0 3px; }
+      li { padding: 12px; gap: 10px; }
+    }
     .times .arrow { color: var(--muted); font-weight: 500; margin: 0 6px; }
     .meta { margin-left: auto; text-align: right; font-size: .8rem; color: var(--muted); font-weight: 700; }
     .badge { display: inline-block; background: var(--pink); color: var(--ink); border-radius: 999px; padding: 2px 8px; font-size: .7rem; margin-bottom: 2px; }
@@ -149,7 +195,10 @@
   </style>
 </head>
 <body>
-  <button type="button" class="theme-toggle" id="themeToggle"></button>
+  <div class="toggles">
+    <button type="button" class="clock-toggle" id="clockToggle"></button>
+    <button type="button" class="theme-toggle" id="themeToggle"></button>
+  </div>
   <main>
     <h1><span class="train">🚆</span> GO Time</h1>
     <p class="sub">every direct train, all day, no fuss</p>
@@ -181,6 +230,8 @@
     </div>
 
     <p class="status" id="status">Fetching the latest GO timetable… 🚂</p>
+    <p class="live-note" id="liveNote" aria-live="polite"></p>
+    <div class="alerts" id="alerts"></div>
     <ul id="list"></ul>
     <footer>
       <div class="fresh" id="fresh" hidden><span class="pulse"></span><span id="freshText"></span></div>
@@ -257,7 +308,6 @@
 
     // Every direct train on the chosen day that stops at `from`, then later at `to`.
     function findTrains(day, a, b) {
-      const hhmm = (m) => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
       const out = [];
       for (const t of day.trips) {
         let dep = null;
@@ -266,9 +316,9 @@
           else if (t[i] === b && dep !== null && t[i + 1] >= 0) {
             const arr = t[i + 1], mins = arr - dep, line = day.lines[t[0]];
             out.push({
-              depart: hhmm(dep), arrive: hhmm(arr), departMin: dep, nextDay: dep >= 1440,
+              departMin: dep, arriveMin: arr, nextDay: dep >= 1440,
               duration: mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`,
-              line: line.name, colour: line.colour, number: t[1],
+              line: line.name, lineCode: line.code, colour: line.colour, number: String(t[1]),
             });
             break;
           }
@@ -281,6 +331,7 @@
       const a = +from.value, b = +to.value;
       store.set("from", meta.stops[a].code); store.set("to", meta.stops[b].code);
       list.innerHTML = "";
+      stopLive();
       if (a === b) { status.textContent = "Pick two different stations 🙂"; return; }
       const d = date.value.replaceAll("-", "");
       if (!meta.dates.includes(d)) {
@@ -295,14 +346,107 @@
         const day = await dayCache.get(d);
         if (load.last !== req) return; // a newer request superseded this one
         results = findTrains(day, a, b);
-        render();
+        render(true);
+        startLive();
       } catch (e) {
         dayCache.delete(d);
         status.textContent = "😿 " + e.message;
       }
     }
 
-    function render() {
+    // ---------- time format (24h or 12h AM/PM) ----------
+    let clock = store.get("clock") === "12" ? "12" : "24";
+    function fmt(mins) {
+      const m = ((mins % 1440) + 1440) % 1440, h = Math.floor(m / 60), mm = String(m % 60).padStart(2, "0");
+      if (clock === "24") return `${String(h).padStart(2, "0")}:${mm}`;
+      return `${h % 12 || 12}:${mm} ${h < 12 ? "AM" : "PM"}`;
+    }
+    const clockBtn = $("clockToggle");
+    function drawClockBtn() {
+      clockBtn.textContent = clock === "24" ? "24h" : "AM/PM";
+      clockBtn.title = `Switch to ${clock === "24" ? "12-hour (AM/PM)" : "24-hour"} time`;
+      clockBtn.setAttribute("aria-label", clockBtn.title);
+    }
+    clockBtn.onclick = () => {
+      clock = clock === "24" ? "12" : "24";
+      store.set("clock", clock);
+      drawClockBtn();
+      if (results.length) render(false);
+    };
+    drawClockBtn();
+
+    // ---------- live delays (today only, just the trains on screen) ----------
+    let live = null, liveTimer = null, liveReq = 0;
+    const stopName = (code) => meta.stops.find((s) => s.code === code)?.name || code;
+
+    function stopLive() {
+      clearInterval(liveTimer); liveTimer = null; live = null; liveReq++;
+      $("alerts").innerHTML = ""; $("liveNote").textContent = "";
+    }
+
+    function startLive() {
+      if (date.value !== today() || !results.length) return;
+      fetchLive();
+      liveTimer = setInterval(() => { if (!document.hidden) fetchLive(); }, 60_000);
+    }
+
+    async function fetchLive() {
+      const now = new Date().getHours() * 60 + new Date().getMinutes();
+      // Only trains that haven't finished the trip yet (with some slack for delays).
+      const trains = results.filter((r) => r.arriveMin + 60 >= now).slice(0, 80);
+      if (!trains.length) return;
+      const a = meta.stops[+from.value].code, b = meta.stops[+to.value].code;
+      const lines = [...new Set(trains.map((r) => r.lineCode).filter(Boolean))];
+      const q = new URLSearchParams({ from: a, to: b, trips: trains.map((r) => r.number).join(","), lines: lines.join(",") });
+      const req = ++liveReq;
+      try {
+        const data = await getJson(`/api/live?${q}`);
+        if (req !== liveReq) return; // route or day changed meanwhile
+        if (!data.enabled) { clearInterval(liveTimer); return; } // no API key configured
+        live = data;
+        render(false);
+      } catch {
+        if (req === liveReq) $("liveNote").textContent = "Live updates are unavailable right now";
+      }
+    }
+
+    function livePills(r) {
+      const s = live?.trips?.[r.number];
+      if (!s) return "";
+      const out = [];
+      if (s.cancelled) out.push(`<span class="pill bad">✖ Cancelled</span>`);
+      else {
+        if (s.skips?.length) out.push(`<span class="pill bad">Skips ${s.skips.map(stopName).join(" & ")}</span>`);
+        const delay = s.departDelay ?? s.delay;
+        if (delay != null) {
+          if (delay >= 2) {
+            const at = s.departs != null ? ` · leaves ${fmt(s.departs)}` : "";
+            out.push(`<span class="pill late">🟠 ${delay} min late${at}</span>`);
+          } else out.push(`<span class="pill ok">🟢 On time</span>`);
+        }
+        if (s.platform) out.push(`<span class="pill info">Platform ${s.platform}</span>`);
+      }
+      return out.join("");
+    }
+
+    // A train counts as gone once its (possibly delayed) departure has passed.
+    function expectedDeparture(r) {
+      const s = live?.trips?.[r.number];
+      return r.departMin + Math.max(0, s?.departDelay ?? s?.delay ?? 0);
+    }
+
+    function renderAlerts() {
+      const esc = (t) => t.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+      $("alerts").innerHTML = (live?.alerts || []).map((al) =>
+        `<details class="alert"><summary>${esc(al.subject || "Service alert")}</summary>${al.body ? `<p>${esc(al.body)}</p>` : ""}</details>`
+      ).join("");
+      if (live) {
+        const t = new Date(live.updated).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: clock === "12" });
+        $("liveNote").textContent = `🛰️ Live status for this route · updated ${t}${live.partial ? " (some info missing)" : ""}`;
+      }
+    }
+
+    function render(scroll) {
       if (!results.length) {
         status.textContent = "No direct trains that day 🥲";
         list.innerHTML = "";
@@ -312,19 +456,24 @@
       const now = new Date().getHours() * 60 + new Date().getMinutes();
       let nextMarked = false;
       status.textContent = `${results.length} direct train${results.length === 1 ? "" : "s"} ✨`;
+      renderAlerts();
       list.innerHTML = results.map((r) => {
-        let cls = "";
-        if (isToday && r.departMin < now) cls = "past";
-        else if (isToday && !nextMarked) { cls = "next"; nextMarked = true; }
-        const badge = cls === "next" ? `<span class="badge">next up</span><br>` : "";
+        const cancelled = !!live?.trips?.[r.number]?.cancelled;
+        let cls = cancelled ? "cancelled" : "";
+        if (isToday && expectedDeparture(r) < now) cls += " past";
+        else if (isToday && !nextMarked && !cancelled) { cls += " next"; nextMarked = true; }
+        const badge = cls.includes("next") ? `<span class="badge">next up</span><br>` : "";
         const late = r.nextDay ? ` <small title="after midnight">🌙</small>` : "";
-        return `<li class="${cls}">
+        return `<li class="${cls.trim()}">
           <span class="dot" style="background:#${r.colour || "2e9e5b"}"></span>
-          <span class="times">${r.depart}<span class="arrow">→</span>${r.arrive}${late}</span>
+          <span class="times-col">
+            <span class="times">${fmt(r.departMin)}<span class="arrow">→</span>${fmt(r.arriveMin)}${late}</span>
+            <span class="live">${isToday ? livePills(r) : ""}</span>
+          </span>
           <span class="meta">${badge}⏱ ${r.duration}<br>${r.line} · #${r.number}</span>
         </li>`;
       }).join("");
-      document.querySelector("li.next")?.scrollIntoView({ block: "center", behavior: "smooth" });
+      if (scroll) document.querySelector("li.next")?.scrollIntoView({ block: "center", behavior: "smooth" });
     }
 
     // ---------- calendar ----------

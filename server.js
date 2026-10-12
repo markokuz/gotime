@@ -3,10 +3,18 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 
+// Load KEY=value lines from .env (e.g. METROLINX_API_KEY) for local runs; Vercel sets these itself.
+try {
+  for (const line of fs.readFileSync(path.join(__dirname, ".env"), "utf8").split(/\r?\n/)) {
+    const m = line.match(/^\s*(\w+)\s*=\s*(.*?)\s*$/);
+    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^(['"])(.*)\1$/, "$2");
+  }
+} catch {}
+
 const PORT = process.env.PORT || 3000;
 const PUBLIC = path.join(__dirname, "public");
 const MIME = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".json": "application/json", ".svg": "image/svg+xml" };
-const API = { "/api/index": require("./api/index"), "/api/day": require("./api/day") };
+const API = { "/api/index": require("./api/index"), "/api/day": require("./api/day"), "/api/live": require("./api/live") };
 
 http
   .createServer(async (req, res) => {
