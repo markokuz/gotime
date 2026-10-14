@@ -9,7 +9,7 @@ module.exports = async (req, res) => {
   const send = (status, body, cache) => {
     res.statusCode = status;
     res.setHeader("Content-Type", "application/json");
-    res.setHeader("Cache-Control", cache ? "public, s-maxage=30, stale-while-revalidate=30" : "no-store");
+    res.setHeader("Cache-Control", cache ? "public, s-maxage=15, stale-while-revalidate=15" : "no-store");
     res.end(JSON.stringify(body));
   };
   const q = new URL(req.url, "http://localhost").searchParams;

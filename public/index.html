@@ -76,8 +76,20 @@
     .alert summary::-webkit-details-marker { display: none; }
     .alert summary::before { content: "⚠️ "; }
     .alert p { margin: 6px 0 0; color: var(--ink); white-space: pre-line; }
-    .live-note { text-align: center; color: var(--muted); font-size: .75rem; font-weight: 700; margin: -6px 0 12px; }
+    .live-bar { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; margin: -6px 0 12px; }
+    .live-bar[hidden] { display: none; }
+    .live-note { color: var(--muted); font-size: .75rem; font-weight: 700; text-align: center; }
     .live-note:empty { display: none; }
+    .refresh-btn {
+      display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: .78rem; font-weight: 800;
+      color: var(--green); background: var(--green-soft); border: none; border-radius: 999px;
+      padding: 5px 12px; cursor: pointer;
+    }
+    .refresh-btn:hover { filter: brightness(1.05); }
+    .refresh-btn:focus-visible { outline: 3px solid var(--green-soft); outline-offset: 2px; }
+    .refresh-icon { display: inline-block; font-size: 1rem; line-height: 1; }
+    .refresh-btn.spin .refresh-icon { animation: spin .6s ease-in-out; }
+    @keyframes spin { to { transform: rotate(360deg); } }
     .theme-toggle {
       width: 44px; height: 44px;
       border: 2px solid var(--border); border-radius: 50%; background: var(--card);
@@ -230,7 +242,12 @@
     </div>
 
     <p class="status" id="status">Fetching the latest GO timetable… 🚂</p>
-    <p class="live-note" id="liveNote" aria-live="polite"></p>
+    <div class="live-bar" id="liveBar" hidden>
+      <span class="live-note" id="liveNote" aria-live="polite"></span>
+      <button type="button" class="refresh-btn" id="refreshBtn" title="Refresh live train info" aria-label="Refresh live train info">
+        <span class="refresh-icon" aria-hidden="true">↻</span> Refresh
+      </button>
+    </div>
     <div class="alerts" id="alerts"></div>
     <ul id="list"></ul>
     <footer>
@@ -376,39 +393,62 @@
     drawClockBtn();
 
     // ---------- live delays (today only, just the trains on screen) ----------
-    let live = null, liveTimer = null, liveReq = 0;
+    let live = null, liveTimer = null, liveReq = 0, liveEnabled = true, lastLiveFetch = 0;
+    const REFRESH_GAP = 15_000; // at most one live request per 15 s, however often Refresh is pressed
     const stopName = (code) => meta.stops.find((s) => s.code === code)?.name || code;
+    const nowMin = () => new Date().getHours() * 60 + new Date().getMinutes();
 
     function stopLive() {
       clearInterval(liveTimer); liveTimer = null; live = null; liveReq++;
       $("alerts").innerHTML = ""; $("liveNote").textContent = "";
+      $("liveBar").hidden = true;
     }
 
     function startLive() {
       if (date.value !== today() || !results.length) return;
+      $("liveBar").hidden = false;
       fetchLive();
+      restartLiveTimer();
+    }
+
+    function restartLiveTimer() {
+      clearInterval(liveTimer);
       liveTimer = setInterval(() => { if (!document.hidden) fetchLive(); }, 60_000);
     }
 
     async function fetchLive() {
-      const now = new Date().getHours() * 60 + new Date().getMinutes();
-      // Only trains that haven't finished the trip yet (with some slack for delays).
-      const trains = results.filter((r) => r.arriveMin + 60 >= now).slice(0, 80);
-      if (!trains.length) return;
+      if (!liveEnabled) { $("liveBar").hidden = true; return; }
+      // Only trains that haven't left the From station yet; past trains keep their last info.
+      const now = nowMin();
+      const trains = results.filter((r) => expectedDeparture(r) >= now).slice(0, 80);
+      if (!trains.length) { render(false); return; }
       const a = meta.stops[+from.value].code, b = meta.stops[+to.value].code;
       const lines = [...new Set(trains.map((r) => r.lineCode).filter(Boolean))];
       const q = new URLSearchParams({ from: a, to: b, trips: trains.map((r) => r.number).join(","), lines: lines.join(",") });
       const req = ++liveReq;
+      lastLiveFetch = Date.now();
       try {
         const data = await getJson(`/api/live?${q}`);
         if (req !== liveReq) return; // route or day changed meanwhile
-        if (!data.enabled) { clearInterval(liveTimer); return; } // no API key configured
-        live = data;
+        if (!data.enabled) { liveEnabled = false; clearInterval(liveTimer); $("liveBar").hidden = true; return; } // no API key configured
+        // Replace info for the trains we asked about; keep what we last knew about the rest.
+        const kept = Object.fromEntries(Object.entries(live?.trips || {}).filter(([n]) => !trains.some((r) => r.number === n)));
+        live = { ...data, trips: { ...kept, ...data.trips } };
         render(false);
       } catch {
         if (req === liveReq) $("liveNote").textContent = "Live updates are unavailable right now";
       }
     }
+
+    // Refresh button: always feels responsive, but silently skips the API call if the
+    // last live request was under 15 s ago (it still re-marks which trains have left).
+    const refreshBtn = $("refreshBtn");
+    refreshBtn.onclick = () => {
+      refreshBtn.classList.remove("spin"); void refreshBtn.offsetWidth; refreshBtn.classList.add("spin");
+      if (Date.now() - lastLiveFetch < REFRESH_GAP) { render(false); return; }
+      fetchLive();
+      restartLiveTimer();
+    };
 
     function livePills(r) {
       const s = live?.trips?.[r.number];
